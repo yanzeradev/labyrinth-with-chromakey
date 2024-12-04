@@ -7,9 +7,17 @@ from tkinter import Tk, messagebox
 import time
 
 # Inicializa o labirinto
-rows, cols = 7, 7
+rows, cols = 9, 16
 labirinto = maze(rows, cols)
 labirinto.CreateMaze()
+
+# Cores
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)
+GREEN = (0, 255, 0)
+GRAY = (200, 200, 200)
 
 # Configurações do pygame
 pygame.init()
@@ -31,7 +39,7 @@ game_started = False
 start_time = None
 
 # Configuração da zona de controle
-ZONE_MARGIN = 80  # Margem interna da zona de controle
+ZONE_MARGIN = 130  # Margem interna da zona de controle
 ZONE_COLOR = (0, 0, 255)  # Vermelho
 
 # Função para binarizar a imagem
@@ -100,6 +108,43 @@ def check_start_position(x, y):
 def check_victory(x, y):
     return abs(x - goal_pos[0]) < 20 and abs(y - goal_pos[1]) < 20
 
+def draw_buttons():
+    """Desenha os botões na tela."""
+    button_font = pygame.font.SysFont(None, 40)
+    # Botão "Recomeçar"
+    pygame.draw.rect(screen, GREEN, restart_button_rect)
+    restart_text = button_font.render("Recomeçar", True, BLACK)
+    screen.blit(restart_text, (restart_button_rect.x + 10, restart_button_rect.y + 10))
+
+    # Botão "Sair"
+    pygame.draw.rect(screen, RED, quit_button_rect)
+    quit_text = button_font.render("Sair", True, BLACK)
+    screen.blit(quit_text, (quit_button_rect.x + 40, quit_button_rect.y + 10))
+
+
+def show_message(text, color):
+    """Exibe uma mensagem no centro da tela com botões de ação."""
+    font = pygame.font.SysFont(None, 55)
+    message = font.render(text, True, color)
+    text_rect = message.get_rect(center=(screen.get_width() // 2, screen.get_height() // 3))
+    screen.blit(message, text_rect)
+    draw_buttons()
+
+
+# Retângulos dos botões (para controle de clique)
+button_width, button_height = 150, 50
+restart_button_rect = pygame.Rect(
+    (screen.get_width() // 2 - button_width - 10, screen.get_height() // 2),
+    (button_width, button_height),
+)
+quit_button_rect = pygame.Rect(
+    (screen.get_width() // 2 + 10, screen.get_height() // 2),
+    (button_width, button_height),
+)
+
+# Variável para controlar o estado do jogo
+game_state = "playing"
+
 # Loop principal
 running = True
 while running:
@@ -117,17 +162,7 @@ while running:
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = hands.process(rgb_frame)
 
-    # Desenhando a bolinha azul na imagem original (antes da binarização) para o indicador
-    if results.multi_hand_landmarks:
-        hand_landmarks = results.multi_hand_landmarks[0]
-        index_finger_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
-        finger_x = int(index_finger_tip.x * width)
-        finger_y = int(index_finger_tip.y * height)
-
-        # Desenhando a bolinha azul na imagem original (antes da binarização)
-        cv2.circle(frame, (finger_x, finger_y), 10, (255, 0, 0), -1)  # Bolinha azul
-
-    # Binarização da imagem (após desenhar limites e bolinha)
+    # Binarização da imagem
     binarized_frame = binarize_frame(frame)
 
     # Exibe a imagem binarizada
@@ -137,50 +172,55 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if game_state != "playing":  # Detecta cliques nos botões
+                mouse_pos = pygame.mouse.get_pos()
+                if restart_button_rect.collidepoint(mouse_pos):
+                    # Reinicia o jogo
+                    game_started = False
+                    start_time = None
+                    game_state = "playing"
+                elif quit_button_rect.collidepoint(mouse_pos):
+                    # Sai do jogo
+                    running = False
 
-    # No Pygame, a tela do jogo continua sendo desenhada
-    screen.fill((0, 128, 0))
-    draw_maze()
+    if game_state == "playing":
+        screen.fill((0, 128, 0))
+        draw_maze()
 
-    draw_circle(start_pos, (0, 255, 0), radius=12)
-    draw_circle(goal_pos, (0, 0, 255), radius=12)
+        draw_circle(start_pos, (0, 255, 0), radius=12)
+        draw_circle(goal_pos, (0, 0, 255), radius=12)
 
-    if results.multi_hand_landmarks:
-        hand_landmarks = results.multi_hand_landmarks[0]
-        index_finger_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
-        finger_x = int(index_finger_tip.x * width)
-        finger_y = int(index_finger_tip.y * height)
+        if results.multi_hand_landmarks:
+            hand_landmarks = results.multi_hand_landmarks[0]
+            index_finger_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
+            finger_x = int(index_finger_tip.x * width)
+            finger_y = int(index_finger_tip.y * height)
 
-        if ZONE_MARGIN < finger_x < width - ZONE_MARGIN and ZONE_MARGIN < finger_y < height - ZONE_MARGIN:
-            norm_x = (finger_x - ZONE_MARGIN) / (width - 2 * ZONE_MARGIN) * screen.get_width()
-            norm_y = (finger_y - ZONE_MARGIN) / (height - 2 * ZONE_MARGIN) * screen.get_height()
-            x, y = int(norm_x), int(norm_y)
+            if ZONE_MARGIN < finger_x < width - ZONE_MARGIN and ZONE_MARGIN < finger_y < height - ZONE_MARGIN:
+                norm_x = (finger_x - ZONE_MARGIN) / (width - 2 * ZONE_MARGIN) * screen.get_width()
+                norm_y = (finger_y - ZONE_MARGIN) / (height - 2 * ZONE_MARGIN) * screen.get_height()
+                x, y = int(norm_x), int(norm_y)
 
-            if not game_started:
-                check_start_position(x, y)
-                draw_circle((x, y), (255, 255, 0))
-            else:
-                if check_collision(x, y):
-                    pygame.quit()
-                    cap.release()
-                    cv2.destroyAllWindows()
-                    root = Tk()
-                    root.withdraw()
-                    messagebox.showinfo("Fim de Jogo", "Você bateu na parede!")
-                    root.destroy()
-                    break
+                if not game_started:
+                    check_start_position(x, y)
+                    draw_circle((x, y), (255, 255, 0))
+                else:
+                    if check_collision(x, y):
+                        game_state = "lost"
+                    elif check_victory(x, y):
+                        game_state = "won"
+                    else:
+                        draw_circle((x, y), (255, 0, 0))
 
-                if check_victory(x, y):
-                    pygame.quit()
-                    cap.release()
-                    cv2.destroyAllWindows()
-                    root = Tk()
-                    root.withdraw()
-                    messagebox.showinfo("Parabéns!", "Você venceu o jogo!")
-                    root.destroy()
-                    break
-
-                draw_circle((x, y), (255, 0, 0))
+    else:
+        # Exibe a mensagem dependendo do estado do jogo
+        if game_state == "lost":
+            screen.fill(BLACK)
+            show_message("Colisão! Você perdeu!", RED)
+        elif game_state == "won":
+            screen.fill(BLACK)
+            show_message("Parabéns! Você venceu!", GREEN)
 
     pygame.display.flip()
     clock.tick(30)
@@ -191,3 +231,4 @@ while running:
 cap.release()
 cv2.destroyAllWindows()
 pygame.quit()
+
