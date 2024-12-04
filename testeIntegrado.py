@@ -1,5 +1,6 @@
 import pygame
 import cv2
+import numpy as np
 import mediapipe as mp
 from pyamaze import maze
 from tkinter import Tk, messagebox
@@ -34,6 +35,14 @@ ZONE_MARGIN = 70  # Margem interna da zona de controle
 ZONE_COLOR = (0, 0, 255)  # Vermelho
 
 # Funções
+def remove_green_background(frame):
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    lower_green = np.array([35, 55, 55])
+    upper_green = np.array([90, 255, 255])
+    mask = cv2.inRange(hsv, lower_green, upper_green)
+    res = cv2.bitwise_and(frame, frame, mask=cv2.bitwise_not(mask))
+    return res
+
 def draw_maze():
     screen.fill((0, 128, 0))
     for r in range(1, rows + 1):
@@ -92,7 +101,8 @@ while running:
         break
 
     frame = cv2.flip(frame, 1)
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    no_bg_frame = remove_green_background(frame)
+    rgb_frame = cv2.cvtColor(no_bg_frame, cv2.COLOR_BGR2RGB)
     results = hands.process(rgb_frame)
 
     height, width, _ = frame.shape
@@ -119,9 +129,7 @@ while running:
         # Mostrar bolinha azul na webcam
         cv2.circle(frame, (finger_x, finger_y), 10, (255, 0, 0), -1)
 
-        # Restrição à zona de controle
         if ZONE_MARGIN < finger_x < width - ZONE_MARGIN and ZONE_MARGIN < finger_y < height - ZONE_MARGIN:
-            # Normaliza as coordenadas da zona de controle para o jogo
             norm_x = (finger_x - ZONE_MARGIN) / (width - 2 * ZONE_MARGIN) * screen.get_width()
             norm_y = (finger_y - ZONE_MARGIN) / (height - 2 * ZONE_MARGIN) * screen.get_height()
             x, y = int(norm_x), int(norm_y)
