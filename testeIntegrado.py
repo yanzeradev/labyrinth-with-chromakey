@@ -7,7 +7,7 @@ from tkinter import Tk, messagebox
 import time
 
 # Inicializa o labirinto
-rows, cols = 10, 10
+rows, cols = 7, 7
 labirinto = maze(rows, cols)
 labirinto.CreateMaze()
 
@@ -31,18 +31,25 @@ game_started = False
 start_time = None
 
 # Configuração da zona de controle
-ZONE_MARGIN = 70  # Margem interna da zona de controle
+ZONE_MARGIN = 80  # Margem interna da zona de controle
 ZONE_COLOR = (0, 0, 255)  # Vermelho
 
-# Funções
-def remove_green_background(frame):
+# Função para binarizar a imagem
+def binarize_frame(frame):
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    lower_green = np.array([35, 55, 55])
-    upper_green = np.array([90, 255, 255])
+    lower_green = np.array([36, 25, 25])
+    upper_green = np.array([70, 255, 255])
     mask = cv2.inRange(hsv, lower_green, upper_green)
-    res = cv2.bitwise_and(frame, frame, mask=cv2.bitwise_not(mask))
-    return res
+    
+    # Aplicando um filtro para melhorar a detecção do verde
+    mask = cv2.GaussianBlur(mask, (5, 5), 0)  # Filtro para reduzir o "chuvisco"
+    
+    mask_inv = cv2.bitwise_not(mask)
+    _, img_binary = cv2.threshold(mask_inv, 127, 255, cv2.THRESH_BINARY)
+    
+    return img_binary
 
+# Funções do labirinto e do jogo
 def draw_maze():
     screen.fill((0, 128, 0))
     for r in range(1, rows + 1):
@@ -101,19 +108,37 @@ while running:
         break
 
     frame = cv2.flip(frame, 1)
-    no_bg_frame = remove_green_background(frame)
-    rgb_frame = cv2.cvtColor(no_bg_frame, cv2.COLOR_BGR2RGB)
+
+    # Desenhando o limite em vermelho na imagem original (antes da binarização)
+    height, width = frame.shape[:2]
+    cv2.rectangle(frame, (ZONE_MARGIN, ZONE_MARGIN), (width - ZONE_MARGIN, height - ZONE_MARGIN), (0, 0, 255), 2)
+
+    # Detecção da mão
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = hands.process(rgb_frame)
 
-    height, width, _ = frame.shape
+    # Desenhando a bolinha azul na imagem original (antes da binarização) para o indicador
+    if results.multi_hand_landmarks:
+        hand_landmarks = results.multi_hand_landmarks[0]
+        index_finger_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
+        finger_x = int(index_finger_tip.x * width)
+        finger_y = int(index_finger_tip.y * height)
 
-    # Desenhar a zona de controle
-    cv2.rectangle(frame, (ZONE_MARGIN, ZONE_MARGIN), (width - ZONE_MARGIN, height - ZONE_MARGIN), ZONE_COLOR, 2)
+        # Desenhando a bolinha azul na imagem original (antes da binarização)
+        cv2.circle(frame, (finger_x, finger_y), 10, (255, 0, 0), -1)  # Bolinha azul
 
+    # Binarização da imagem (após desenhar limites e bolinha)
+    binarized_frame = binarize_frame(frame)
+
+    # Exibe a imagem binarizada
+    cv2.imshow('Imagem Binarizada', binarized_frame)
+
+    # Processamento do pygame
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
+    # No Pygame, a tela do jogo continua sendo desenhada
     screen.fill((0, 128, 0))
     draw_maze()
 
@@ -125,9 +150,6 @@ while running:
         index_finger_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
         finger_x = int(index_finger_tip.x * width)
         finger_y = int(index_finger_tip.y * height)
-
-        # Mostrar bolinha azul na webcam
-        cv2.circle(frame, (finger_x, finger_y), 10, (255, 0, 0), -1)
 
         if ZONE_MARGIN < finger_x < width - ZONE_MARGIN and ZONE_MARGIN < finger_y < height - ZONE_MARGIN:
             norm_x = (finger_x - ZONE_MARGIN) / (width - 2 * ZONE_MARGIN) * screen.get_width()
@@ -160,7 +182,6 @@ while running:
 
                 draw_circle((x, y), (255, 0, 0))
 
-    cv2.imshow("Webcam", frame)
     pygame.display.flip()
     clock.tick(30)
 
