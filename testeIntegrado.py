@@ -17,11 +17,9 @@ def create_maze(rows, cols):
 
 # Configurações iniciais
 rows, cols = 3, 5
-cell_size = 45
-labirinto = create_maze(rows, cols)
-screen_width = max(600, cols * cell_size + 100)
-screen_height = max(400, rows * cell_size + 150)
-screen = pygame.display.set_mode((screen_width, screen_height))
+screen_width = 800
+screen_height = 600
+screen = pygame.display.set_mode((screen_width, screen_height), pygame.RESIZABLE)
 pygame.display.set_caption("Labirinto com Pygame - Controle por Mão")
 clock = pygame.time.Clock()
 
@@ -30,17 +28,17 @@ mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
 cap = cv2.VideoCapture(0)
 
-# Cálculo para centralizar o labirinto
-maze_x_offset = (screen_width - cols * cell_size) // 2
-maze_y_offset = (screen_height - rows * cell_size - 100) // 2
-
-# Posições inicial e final (ajustadas com o deslocamento)
-def update_positions():
-    global start_pos, goal_pos
+# Função para atualizar o tamanho da célula e as posições
+def update_cell_size_and_positions():
+    global cell_size, maze_x_offset, maze_y_offset, start_pos, goal_pos
+    cell_size = min(screen_width // cols, (screen_height - 100) // rows)  # Ajusta o tamanho da célula
+    maze_x_offset = (screen_width - cols * cell_size) // 2
+    maze_y_offset = (screen_height - rows * cell_size - 100) // 2
     start_pos = (maze_x_offset + cell_size // 2, maze_y_offset + cell_size // 2)
     goal_pos = (maze_x_offset + cols * cell_size - cell_size // 2, maze_y_offset + rows * cell_size - cell_size // 2)
 
-update_positions()
+labirinto = create_maze(rows, cols)
+update_cell_size_and_positions()
 
 game_started = False
 game_over = False
@@ -54,23 +52,13 @@ ZONE_COLOR = (0, 0, 255)
 # Funções
 
 def binarize_image(frame):
-    # Intervalo de cor verde (em HSV)
     lower_green = np.array([35, 40, 40])
     upper_green = np.array([85, 255, 255])
-
-    # Convertendo para o espaço de cor HSV
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-
-    # Mascara para o fundo verde
     mask = cv2.inRange(hsv, lower_green, upper_green)
-
-    # Inverter a máscara (fundo verde vira preto e outras áreas viram branco)
     mask = cv2.bitwise_not(mask)
-    
-    # Adicionar um pouco de dilatação para reduzir o ruído
     kernel = np.ones((5, 5), np.uint8)
     mask = cv2.dilate(mask, kernel, iterations=1)
-
     return mask
 
 def draw_maze():
@@ -86,7 +74,7 @@ def draw_maze():
             if cell['N'] == 0:
                 pygame.draw.line(screen, (0, 0, 0), (x, y), (x + cell_size, y), 2)
             if cell['S'] == 0:
-                pygame.draw.line(screen, (0, 0, 0), (x, y + cell_size), (x + cell_size, y + cell_size), 2)
+                pygame.draw.line(screen, (0, 0, 0), (x, y + cell_size ), (x + cell_size, y + cell_size), 2)
 
 def draw_circle(pos, color, radius=8):
     pygame.draw.circle(screen, color, pos, radius)
@@ -166,6 +154,10 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        if event.type == pygame.VIDEORESIZE:
+            screen_width, screen_height = event.w, event.h
+            screen = pygame.display.set_mode((screen_width, screen_height), pygame.RESIZABLE)
+            update_cell_size_and_positions()
 
     screen.fill((0, 128, 0))
     draw_maze()
@@ -216,16 +208,17 @@ while running:
                 rows += 1
                 cols += 1
                 labirinto = create_maze(rows, cols)
-                update_positions()
+                update_cell_size_and_positions()
                 game_started = False
                 game_over = False
             elif not victory and is_button_pressed(mx, my, screen_width // 2 - 175, screen_height // 2, 150, 50):
                 labirinto = create_maze(rows, cols)
-                update_positions()
+                update_cell_size_and_positions()
                 game_started = False
                 game_over = False
             elif not victory and is_button_pressed(mx, my, screen_width // 2 + 25, screen_height // 2, 150, 50):
                 running = False
+
     pygame.display.flip()
     clock.tick(30)
 
