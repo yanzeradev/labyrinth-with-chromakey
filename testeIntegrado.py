@@ -16,10 +16,10 @@ def create_maze(rows, cols):
 
 # Configurações iniciais
 rows, cols = 3, 5
-labirinto = create_maze(rows, cols)
 cell_size = 45
-screen_width = max(600, cols * cell_size)
-screen_height = max(400, rows * cell_size + 100)
+labirinto = create_maze(rows, cols)
+screen_width = max(600, cols * cell_size + 100)
+screen_height = max(400, rows * cell_size + 150)
 screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("Labirinto com Pygame - Controle por Mão")
 clock = pygame.time.Clock()
@@ -29,9 +29,17 @@ mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
 cap = cv2.VideoCapture(0)
 
-# Posições inicial e final
-start_pos = (cell_size // 2, cell_size // 2)
-goal_pos = (cols * cell_size - cell_size // 2, rows * cell_size - cell_size // 2)
+# Cálculo para centralizar o labirinto
+maze_x_offset = (screen_width - cols * cell_size) // 2
+maze_y_offset = (screen_height - rows * cell_size - 100) // 2
+
+# Posições inicial e final (ajustadas com o deslocamento)
+def update_positions():
+    global start_pos, goal_pos
+    start_pos = (maze_x_offset + cell_size // 2, maze_y_offset + cell_size // 2)
+    goal_pos = (maze_x_offset + cols * cell_size - cell_size // 2, maze_y_offset + rows * cell_size - cell_size // 2)
+
+update_positions()
 
 game_started = False
 game_over = False
@@ -47,7 +55,7 @@ def draw_maze():
     screen.fill((0, 128, 0))
     for r in range(1, rows + 1):
         for c in range(1, cols + 1):
-            x, y = (c - 1) * cell_size, (r - 1) * cell_size
+            x, y = maze_x_offset + (c - 1) * cell_size, maze_y_offset + (r - 1) * cell_size
             cell = labirinto.maze_map[(r, c)]
             if cell['E'] == 0:
                 pygame.draw.line(screen, (0, 0, 0), (x + cell_size, y), (x + cell_size, y + cell_size), 2)
@@ -62,12 +70,12 @@ def draw_circle(pos, color, radius=8):
     pygame.draw.circle(screen, color, pos, radius)
 
 def check_collision(x, y):
-    cell_x, cell_y = x // cell_size + 1, y // cell_size + 1
+    cell_x, cell_y = (x - maze_x_offset) // cell_size + 1, (y - maze_y_offset) // cell_size + 1
     if cell_y < 1 or cell_y > rows or cell_x < 1 or cell_x > cols:
         return True
     
     cell = labirinto.maze_map[(cell_y, cell_x)]
-    offset_x, offset_y = x % cell_size, y % cell_size
+    offset_x, offset_y = (x - maze_x_offset) % cell_size, (y - maze_y_offset) % cell_size
 
     if offset_x < 8 and not cell['W']:
         return True
@@ -131,8 +139,8 @@ while running:
     screen.fill((0, 128, 0))
     draw_maze()
 
-    draw_circle(start_pos, (0, 255, 0), radius=8)
-    draw_circle(goal_pos, (0, 0, 255), radius=8)
+    draw_circle(start_pos, (0, 255, 0), radius=10)
+    draw_circle(goal_pos, (0, 0, 255), radius=10)
 
     if results.multi_hand_landmarks:
         hand_landmarks = results.multi_hand_landmarks[0]
@@ -145,8 +153,8 @@ while running:
 
         # Restrição à zona de controle
         if ZONE_MARGIN < finger_x < width - ZONE_MARGIN and ZONE_MARGIN < finger_y < height - ZONE_MARGIN:
-            norm_x = (finger_x - ZONE_MARGIN) / (width - 2 * ZONE_MARGIN) * screen.get_width()
-            norm_y = (finger_y - ZONE_MARGIN) / (height - 2 * ZONE_MARGIN) * screen.get_height()
+            norm_x = (finger_x - ZONE_MARGIN) / (width - 2 * ZONE_MARGIN) * screen_width
+            norm_y = (finger_y - ZONE_MARGIN) / (height - 2 * ZONE_MARGIN) * screen_height
             x, y = int(norm_x), int(norm_y)
 
             if not game_started and not game_over:
@@ -177,17 +185,16 @@ while running:
                 rows += 1
                 cols += 1
                 labirinto = create_maze(rows, cols)
+                update_positions()
                 game_started = False
                 game_over = False
-                start_time = None
-            elif not victory:
-                if is_button_pressed(mx, my, screen_width // 2 - 175, screen_height // 2, 150, 50):
-                    labirinto = create_maze(rows, cols)
-                    game_started = False
-                    game_over = False
-                    start_time = None
-                elif is_button_pressed(mx, my, screen_width // 2 + 25, screen_height // 2, 150, 50):
-                    running = False
+            elif not victory and is_button_pressed(mx, my, screen_width // 2 - 175, screen_height // 2, 150, 50):
+                labirinto = create_maze(rows, cols)
+                update_positions()
+                game_started = False
+                game_over = False
+            elif not victory and is_button_pressed(mx, my, screen_width // 2 + 25, screen_height // 2, 150, 50):
+                running = False
 
     cv2.imshow("Webcam", frame)
     pygame.display.flip()
