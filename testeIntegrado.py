@@ -3,6 +3,7 @@ import cv2
 import mediapipe as mp
 from pyamaze import maze
 import time
+import numpy as np
 
 # Inicializa o Pygame
 pygame.init()
@@ -47,10 +48,31 @@ victory = False
 start_time = None
 
 # Configuração da zona de controle
-ZONE_MARGIN = 120
+ZONE_MARGIN = 110
 ZONE_COLOR = (0, 0, 255)
 
 # Funções
+
+def binarize_image(frame):
+    # Intervalo de cor verde (em HSV)
+    lower_green = np.array([35, 40, 40])
+    upper_green = np.array([85, 255, 255])
+
+    # Convertendo para o espaço de cor HSV
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    # Mascara para o fundo verde
+    mask = cv2.inRange(hsv, lower_green, upper_green)
+
+    # Inverter a máscara (fundo verde vira preto e outras áreas viram branco)
+    mask = cv2.bitwise_not(mask)
+    
+    # Adicionar um pouco de dilatação para reduzir o ruído
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.dilate(mask, kernel, iterations=1)
+
+    return mask
+
 def draw_maze():
     screen.fill((0, 128, 0))
     for r in range(1, rows + 1):
@@ -131,6 +153,15 @@ while running:
 
     # Desenhar a zona de controle
     cv2.rectangle(frame, (ZONE_MARGIN, ZONE_MARGIN), (width - ZONE_MARGIN, height - ZONE_MARGIN), ZONE_COLOR, 2)
+    
+    # Criar imagem binarizada
+    binary_frame = binarize_image(frame)
+
+    # Empilhar as imagens (original e binarizada) lado a lado
+    combined_frame = np.hstack((frame, cv2.cvtColor(binary_frame, cv2.COLOR_GRAY2BGR)))
+
+    # Exibir a imagem combinada
+    cv2.imshow("Webcam - Original e Binarizada", combined_frame)
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -195,8 +226,6 @@ while running:
                 game_over = False
             elif not victory and is_button_pressed(mx, my, screen_width // 2 + 25, screen_height // 2, 150, 50):
                 running = False
-
-    cv2.imshow("Webcam", frame)
     pygame.display.flip()
     clock.tick(30)
 
